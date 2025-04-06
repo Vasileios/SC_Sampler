@@ -6,8 +6,34 @@
 //midi connection
 (
 s.waitForBoot({
-    var buffer, win, soundMenu, selectedSound, funcs, sndFileView, bus, f, p;
+    var rate = 1.0, cutoff = 1000, pitchShift = 1.0;
+	  var synth, buffer, win, soundMenu, selectedSound, funcs, sndFileView, bus, f, p;
     var soundFiles, snd;
+
+    // Create analysis Bus (2 channels)
+    bus = Bus.audio(s, 2);  // Create a bus with 2 channels (stereo)
+
+    // Create the SynthDef for the sampler
+    SynthDef(\sampler, {
+        arg buf, rate = 1, cutoff = 1000, amp = 0.5, out=0, tapOut=0, gate = 1;
+        var env, sig;
+
+		//envelope
+		//env = EnvGen.kr(Env.adsr(0.01, 0.5, 0.4, 1.0), gate, doneAction:2);
+		//env = EnvGen.kr(Env.perc(0.01, 1.0), doneAction:2);
+
+        // Play the buffer (sample) with rate control
+        sig = PlayBuf.ar(1, buf, BufRateScale.kr(buf) * rate, doneAction:2);
+        // Apply low-pass filter
+        sig = LPF.ar(sig, cutoff);
+        // Apply amplitude control
+        sig = sig * amp;
+        // Output to the main audio output (speakers)
+        Out.ar(out, sig ! 2);
+        // Output to the analysis bus (for scopes)
+        Out.ar(bus.index, sig ! 2);  // Route to the analysis bus (2 channels)
+    }).add;
+
 
     // List of sound files for selection (add your actual sound files here)
  soundFiles = [
@@ -75,23 +101,7 @@ s.waitForBoot({
         .string_("Selected Sound: " ++ selectedSound)
         .align_(\left);  // Align text to the left
 
-    // Create the SynthDef for the sampler
-    SynthDef(\sampler, {
-        arg buf, rate = 1, cutoff = 1000, amp = 0.5, out=0;
-        var sig;
-
-        // Play the buffer (sample) with rate control
-        sig = PlayBuf.ar(1, buf, BufRateScale.kr(buf) * rate, doneAction:2);
-        // Apply low-pass filter
-        sig = LPF.ar(sig, cutoff);
-        // Apply amplitude control
-        sig = sig * amp;
-        // Output to the main audio output (speakers)
-        Out.ar(out, sig ! 2);
-    }).add;
-
-    // Set up GUI layout
-    win.layout = VLayout(
+	 win.layout = VLayout(
         soundMenu,  // Add the sound selection menu
         StaticText().string_("Play MIDI Notes for pitch\nCC1 controls filter").align_(\center),
         Button().states_([["Play Sample"]]).action_({
@@ -105,29 +115,37 @@ s.waitForBoot({
         sndFileView // Add the SoundFileView for waveform display
     );
 
-    // MIDI Setup
-    MIDIClient.init;
-    MIDIIn.connectAll;
+		 // Refresh the views on the AppClock for smooth update
 
-    // MIDI Note control for pitch (NoteOn)
-    MIDIdef.noteOn(\playSample, { |vel, num, chan, src|
-        var pitchShift = num.midicps / 440;  // Convert MIDI note to pitch
-        Synth(\sampler, [\buf, buffer, \rate, pitchShift, \cutoff, 1000]);
-    });
-
-    // MIDI CC control for filter cutoff (CC1)
-    MIDIdef.cc(\filterCutoff, { |val, num, chan, src|
-        var cutoff = val.linexp(0, 127, 200, 10000);  // Map CC to cutoff
-        ("Cutoff: " ++ cutoff).postln;
-    }, 1);
-
-    // Refresh the SoundFileView on the AppClock for smooth update
-    Routine({
+	 Routine({
         inf.do {
             sndFileView.refresh;  // Refresh the waveform view as well
             0.05.wait;  // Refresh every 50ms
         }
     }).play(AppClock);
 
-})
+    // MIDI Setup
+    MIDIClient.init;
+    MIDIIn.connectAll;
+
+    // MIDI Note control for pitch (NoteOn)
+    MIDIdef.noteOn(\playSample, { |vel, num, chan, src|
+        pitchShift = num.midicps / 440;  // Convert MIDI note to pitch
+        synth = Synth(\sampler, [\buf, buffer, \rate, pitchShift, \cutoff, cutoff, \tapOut, bus.index]);
+    });
+
+	 // MIDI Note control for pitch (NoteOff)
+    MIDIdef.noteOff(\playSampleOff, { |vel, num, chan, src|
+        // Stop the synth when note is released (NoteOff)
+        synth.free;
+        ("Note off: " ++ num).postln;  // Print the note number to confirm
+    });
+    // MIDI CC control for filter cutoff (CC1)
+    MIDIdef.cc(\filterCutoff, { |val, num, chan, src|
+        cutoff = val.linexp(0, 127, 200, 10000);  // Map CC to cutoff
+        ("Cutoff: " ++ cutoff).postln;
+        // Update cutoff in real-time by sending control value to the Synth
+        synth.set(\cutoff, cutoff);  // Send real-time cutoff value to the running synth
+    }, 1);
+});
 )
