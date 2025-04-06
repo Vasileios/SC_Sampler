@@ -1,5 +1,9 @@
 
 
+//VA code 060425 Sampler 
+//Popup to select sounds
+//waveform view
+//midi connection
 (
 s.waitForBoot({
     var buffer, win, soundMenu, selectedSound, funcs, sndFileView, bus, f, p;
