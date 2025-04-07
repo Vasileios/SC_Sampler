@@ -3,7 +3,8 @@
 //VA code 060425 Sampler 
 //Popup to select sounds
 //waveform view
-//midi connection
+//Spectral view
+//midi connection for M-Audio Keystation 49 MK3
 (
 s.waitForBoot({
     var rate = 1.0, cutoff = 1000, pitchShift = 1.0;
@@ -153,5 +154,13 @@ s.waitForBoot({
         // Update cutoff in real-time by sending control value to the Synth
         synth.set(\cutoff, cutoff);  // Send real-time cutoff value to the running synth
     }, 1);
+
+ // MIDI CC control for volume (CC7)
+    MIDIdef.cc(\volume, { |val, num, chan, src|
+        vol = val.linlin(0, 127, 0.001, 1.0);  // Map CC to volume
+        ("Volume: " ++ vol).postln;
+        // Update volume in real-time by sending control value to the Synth
+        synth.set(\amp, vol);  // Send real-time volume value to the running synth
+    }, 7);
 });
 )
