@@ -115,6 +115,12 @@ s.waitForBoot({
         sndFileView // Add the SoundFileView for waveform display
     );
 
+//Spectograpm
+~fre = FreqScopeView(win, Rect(20,20,360,50));
+~fre.active_(true);
+~alpha = Spectrogram.new(win, Rect(20,70,360,50), background:Color(0.05, 0.05, 0.05), color:Color.green, lowfreq:20, highfreq:7000);
+~alpha.start;
+
 		 // Refresh the views on the AppClock for smooth update
 
 	 Routine({
